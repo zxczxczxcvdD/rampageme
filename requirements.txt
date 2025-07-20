@@ -1,0 +1,5 @@
+pyTelegramBotAPI==4.14.0
+telethon==1.32.1
+cryptg==0.4.0 
+pyCryptoPayAPI==1.0.0
+psycopg2-binary==2.9.7 
