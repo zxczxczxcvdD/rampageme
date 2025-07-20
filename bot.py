@@ -87,16 +87,6 @@ def create_main_keyboard():
     )
     return keyboard
 
-def create_search_method_keyboard():
-    """Создает клавиатуру для выбора метода поиска"""
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    keyboard.add(
-        InlineKeyboardButton("📱 Поиск по номеру", callback_data="search_phone"),
-        InlineKeyboardButton("👤 Поиск по имени", callback_data="search_name"),
-        InlineKeyboardButton("🖤 Назад", callback_data="back_to_main")
-    )
-    return keyboard
-
 def create_shop_keyboard():
     """Создает клавиатуру магазина"""
     keyboard = InlineKeyboardMarkup(row_width=2)
@@ -192,17 +182,6 @@ def search_phone_number_sync(phone_number):
     except Exception as e:
         return f"❌ Ошибка поиска: {str(e)}"
 
-def search_by_name_sync(name):
-    """Синхронная обертка для поиска по имени"""
-    if not telethon_client or not telethon_loop:
-        return "❌ Telethon клиент не инициализирован"
-    
-    try:
-        future = asyncio.run_coroutine_threadsafe(search_by_name(name), telethon_loop)
-        return future.result(timeout=30)  # 30 секунд таймаут
-    except Exception as e:
-        return f"❌ Ошибка поиска: {str(e)}"
-
 async def search_phone_number(phone_number):
     """Поиск информации по номеру телефона через @Userrsboxx_bot"""
     try:
@@ -237,51 +216,6 @@ async def search_phone_number(phone_number):
             
             # Проверяем, не скрыты ли данные
             if "🛡️" in result and "Владелец номера скрыл свои данные" in result:
-                print("Обнаружены скрытые данные, заменяем сообщение")
-                return "❌ Информация не найдена"
-            
-            # Если данные найдены и не скрыты, возвращаем результат
-            return result
-        
-        return "❌ Информация не найдена"
-        
-    except Exception as e:
-        return f"❌ Ошибка поиска: {str(e)}"
-
-async def search_by_name(name):
-    """Поиск информации по имени через @Probiv_Probitdri_Bot"""
-    try:
-        # Находим бота @Probiv_Probitdri_Bot
-        bot_entity = await telethon_client.get_entity("@Probiv_Probitdri_Bot")
-        
-        # Очищаем чат с ботом перед поиском
-        print("🧹 Очищаем чат с @Probiv_Probitdri_Bot...")
-        await telethon_client.delete_dialog(bot_entity)
-        
-        # Ждем немного после очистки
-        await asyncio.sleep(1)
-        
-        # Отправляем имя для поиска
-        await telethon_client.send_message(bot_entity, name)
-        
-        # Ждем немного перед получением сообщений
-        await asyncio.sleep(2)
-        
-        # Получаем последние сообщения от бота
-        messages = []
-        async for message in telethon_client.iter_messages(bot_entity, limit=3):
-            if message.text and message.text != name:
-                messages.append(message.text)
-        
-        # Проверяем результат
-        if messages:
-            result = messages[1] if len(messages) >= 2 else messages[0]
-            
-            # Отладочная информация
-            print(f"Получен ответ от бота: {result}")
-            
-            # Проверяем, не скрыты ли данные
-            if "🛡️" in result and "Владелец скрыл свои данные" in result:
                 print("Обнаружены скрытые данные, заменяем сообщение")
                 return "❌ Информация не найдена"
             
@@ -1675,10 +1609,7 @@ def generate_navigation_sections(data):
 
 # --- Вспомогательные функции ---
 def register_user(user_id, username):
-    from db import get_all_users, add_user
-    users = get_all_users()
-    if not any(row[0] == user_id for row in users):
-        add_user(user_id, username)
+    add_user(user_id, username)
 
 # --- Капча ---
 def need_captcha(user_id):
@@ -1802,17 +1733,8 @@ def handle_captcha_emoji(call: CallbackQuery):
     user_id = call.from_user.id
     set_captcha_passed(user_id)
     bot.answer_callback_query(call.id, "💚 Капча пройдена!")
-    # Сначала убираем клавиатуру и показываем сообщение о прохождении капчи
-    bot.edit_message_text(
-        "💚 Капча успешно пройдена!\n\nТеперь вы можете пользоваться ботом.",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id
-    )
-    # Через 1 секунду показываем главное меню
-    import threading
-    def show_menu():
-        start_command(call.message, edit=True)
-    threading.Timer(1.0, show_menu).start()
+    # Теперь редактируем исходное сообщение, а не отправляем новое
+    start_command(call.message, edit=True)
 
 # --- Бесплатные запросы ---
 def has_free_request(user_id):
@@ -2454,13 +2376,14 @@ def handle_about(call: CallbackQuery):
 
 @bot.callback_query_handler(func=lambda call: call.data == "start_search")
 def handle_start_search(call: CallbackQuery):
+    user_id = call.from_user.id
+    user_states[user_id] = {"state": "waiting_for_phone"}
     bot.answer_callback_query(call.id)
     bot.edit_message_text(
-        "💚 <b>Выберите способ поиска:</b>",
+        "📱 <b>Поиск по номеру телефона</b>\n\nВведите номер телефона для поиска:\n\n<code>+7XXXXXXXXXX</code>\nПример: <code>+79123456789</code>",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
-        parse_mode='HTML',
-        reply_markup=create_search_method_keyboard()
+        parse_mode='HTML'
     )
 
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
