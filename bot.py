@@ -1675,7 +1675,10 @@ def generate_navigation_sections(data):
 
 # --- Вспомогательные функции ---
 def register_user(user_id, username):
-    add_user(user_id, username)
+    from db import get_all_users, add_user
+    users = get_all_users()
+    if not any(row[0] == user_id for row in users):
+        add_user(user_id, username)
 
 # --- Капча ---
 def need_captcha(user_id):
@@ -1799,8 +1802,17 @@ def handle_captcha_emoji(call: CallbackQuery):
     user_id = call.from_user.id
     set_captcha_passed(user_id)
     bot.answer_callback_query(call.id, "💚 Капча пройдена!")
-    # Теперь редактируем исходное сообщение, а не отправляем новое
-    start_command(call.message, edit=True)
+    # Сначала убираем клавиатуру и показываем сообщение о прохождении капчи
+    bot.edit_message_text(
+        "💚 Капча успешно пройдена!\n\nТеперь вы можете пользоваться ботом.",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id
+    )
+    # Через 1 секунду показываем главное меню
+    import threading
+    def show_menu():
+        start_command(call.message, edit=True)
+    threading.Timer(1.0, show_menu).start()
 
 # --- Бесплатные запросы ---
 def has_free_request(user_id):
