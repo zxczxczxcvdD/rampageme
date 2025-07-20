@@ -11,7 +11,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 from pyCryptoPayAPI import pyCryptoPayAPI
-from db import add_user, set_captcha_passed, has_passed_captcha, add_subscription, get_subscription, remove_subscription, add_referral, get_referrals, get_free_requests, add_free_request, use_free_request, get_all_subscriptions, get_all_users, add_channel, remove_channel, get_channels
+from db import add_user, set_captcha_passed, has_passed_captcha, add_subscription, get_subscription, remove_subscription, add_referral, get_referrals, get_free_requests, add_free_request, use_free_request, get_all_subscriptions, get_all_users, add_channel, remove_channel, get_channels, reset_all_captcha
 import psycopg2
 import traceback
 from telebot.apihelper import ApiTelegramException
@@ -1715,7 +1715,7 @@ def handle_search_states(call: CallbackQuery):
         )
 
 @bot.message_handler(commands=['start'])
-def start_command(message: Message):
+def start_command(message: Message, edit=False):
     user_id = message.from_user.id
     username = message.from_user.username or ""
     from db import get_all_users
@@ -1733,8 +1733,8 @@ def start_command(message: Message):
     if need_captcha(user_id):
         correct_emoji = random.choice(["🍏", "🍎", "🍌", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "🥝", "🥑", "🍍"])
         wrong_emojis = random.sample([e for e in ["🍏", "🍎", "🍌", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "🥝", "🥑", "🍍"] if e != correct_emoji], 2)
-        bot.reply_to(
-            message,
+        bot.send_message(
+            message.chat.id,
             f"🖤 Для продолжения выбери <b>правильный эмодзи</b> из списка ниже:\n\n<b>Выбери: {correct_emoji}</b>",
             parse_mode='HTML',
             reply_markup=create_emoji_captcha_keyboard(correct_emoji, wrong_emojis)
@@ -1747,8 +1747,8 @@ def start_command(message: Message):
             InlineKeyboardButton("💚 Подписаться на канал", url=CHANNEL_LINK),
             InlineKeyboardButton("🖤 Проверить подписку", callback_data="check_subscription")
         )
-        bot.reply_to(
-            message,
+        bot.send_message(
+            message.chat.id,
             f"🖤 ***Для использования бота необходимо подписаться на канал!***\n\n"
             f"*Подпишитесь на наш канал <b>{CHANNEL_NAME}</b> для получения доступа к боту:*\n"
             f"<b>{CHANNEL_NAME}</b>\n\n"
@@ -1769,10 +1769,10 @@ def start_command(message: Message):
                     if user_id not in get_referrals(user_id):
                         add_referral(user_id, user_id)
                         add_free_request(user_id)
-                        bot.reply_to(message, "⚠️ Вы пригласили сами себя. Это сработает только 1 раз! Вам начислен 1 бесплатный запрос.")
+                        bot.send_message(message.chat.id, "⚠️ Вы пригласили сами себя. Это сработает только 1 раз! Вам начислен 1 бесплатный запрос.")
                         print(f"[REFERRAL] user_id={user_id} пригласил сам себя — 1 раз, бонус выдан")
                     else:
-                        bot.reply_to(message, "⚠️ Вы уже получали бонус за самоприглашение. Повторно нельзя!")
+                        bot.send_message(message.chat.id, "⚠️ Вы уже получали бонус за самоприглашение. Повторно нельзя!")
                         print(f"[REFERRAL] user_id={user_id} пытался повторно пригласить сам себя — отказано")
                 else:
                     # Не сам себе
@@ -1786,8 +1786,8 @@ def start_command(message: Message):
             except Exception as e:
                 print(f"[REFERRAL] Ошибка начисления бонуса: {e}")
     # --- Приветствие ---
-    bot.reply_to(
-        message,
+    bot.send_message(
+        message.chat.id,
         f"{greet}\n\n{short_desc}",
         parse_mode='HTML',
         reply_markup=create_main_keyboard()
@@ -1799,9 +1799,8 @@ def handle_captcha_emoji(call: CallbackQuery):
     user_id = call.from_user.id
     set_captcha_passed(user_id)
     bot.answer_callback_query(call.id, "💚 Капча пройдена!")
-    fake_message = call.message
-    fake_message.from_user = call.from_user
-    start_command(fake_message)
+    # Теперь редактируем исходное сообщение, а не отправляем новое
+    start_command(call.message, edit=True)
 
 # --- Бесплатные запросы ---
 def has_free_request(user_id):
@@ -2328,6 +2327,7 @@ def handle_admin_steps(message: Message):
                 del admin_states[user_id]
                 return
             add_channel(channel_id, channel_link, channel_name)
+            reset_all_captcha()
             bot.send_message(chat_id, f"💚 Канал <b>{channel_name}</b> добавлен! ID: <code>{channel_id}</code>", parse_mode='HTML', reply_markup=create_back_keyboard())
             del admin_states[user_id]
             return
