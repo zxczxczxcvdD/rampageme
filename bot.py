@@ -109,10 +109,13 @@ def create_emoji_captcha_keyboard(correct_emoji, wrong_emojis):
     return keyboard
 
 def check_channel_subscription(user_id):
-    """Проверяет, подписан ли пользователь на все обязательные каналы"""
+    """Проверяет, подписан ли пользователь на все обязательные каналы (и из кода, и из базы)"""
     try:
-        for channel in get_channels():
-            channel_id = channel[0]
+        # Собираем id всех каналов из кода и базы, без дублей
+        code_ids = set([c["id"] for c in CHANNELS])
+        db_ids = set([str(c[0]) for c in get_channels()])
+        all_ids = code_ids | db_ids
+        for channel_id in all_ids:
             chat_info = bot.get_chat(channel_id)
             print(f"🔍 Отладка: Информация о канале: {chat_info.title}")
             member = bot.get_chat_member(channel_id, user_id)
