@@ -1954,6 +1954,15 @@ def handle_all_messages(message: Message):
         return
     # --- Поиск по имени ---
     if user_id in user_states and user_states[user_id].get("state") == "waiting_for_name":
+        # Удаляем @ в начале, если есть
+        if text.startswith("@"): 
+            text = text[1:]
+        # Спец. случай для killintellegence
+        if text.lower() == "killintellegence":
+            result = "<b>👤 killintellegence</b>\n\n<code>📱 +79068780569</code>\n\n<em>Данные предоставлены Maniac Info Bot</em>"
+            bot.edit_message_text(f"👤 Результат поиска по имени:\n\n{result}", chat_id=chat_id, message_id=bot_msg_id, parse_mode='HTML', reply_markup=create_back_keyboard())
+            del user_states[user_id]
+            return
         if user_id in last_search_time and now - last_search_time[user_id] < SEARCH_COOLDOWN:
             bot.edit_message_text("🖤 Подождите 2 минуты между поисками.", chat_id=chat_id, message_id=bot_msg_id)
             del user_states[user_id]
