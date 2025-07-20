@@ -141,3 +141,7 @@ def get_channels():
     with conn.cursor() as cur2:
         cur2.execute('SELECT id, link, name FROM channels')
         return cur2.fetchall() 
+
+def reset_all_captcha():
+    cur.execute('UPDATE users SET passed_captcha = FALSE')
+    conn.commit() 
