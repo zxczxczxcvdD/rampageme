@@ -56,10 +56,11 @@ except Exception as e:
 telethon_client = None
 telethon_loop = None
 
-# Конфигурация канала для проверки подписки
-CHANNEL_ID = "-1002560851236"  # ID канала 'Белый'
-CHANNEL_LINK = "https://t.me/+WpK8oeax0iU2NTc0"  # Ссылка на канал 'Белый'
-CHANNEL_NAME = "Белый"
+# Конфигурация каналов для проверки подписки
+CHANNELS = [
+    {"id": "-1002560851236", "link": "https://t.me/+WpK8oeax0iU2NTc0", "name": "Белый"},
+    {"id": "-1002697946371", "link": "https://t.me/+_lfBZmwzV6lmZWIy", "name": "DoxForever"}
+]
 
 # Конфигурация оплаты
 CRYPTO_TOKEN = "429741:AAXorUNHqEtXjRMwoOy4bha83bt4FioBrAt"
@@ -102,6 +103,7 @@ def create_shop_keyboard():
 
 def create_emoji_captcha_keyboard(correct_emoji, wrong_emojis):
     """Создает клавиатуру для капчи с эмодзи"""
+    import random
     emojis = wrong_emojis + [correct_emoji]
     random.shuffle(emojis)
     keyboard = InlineKeyboardMarkup(row_width=3)
@@ -110,21 +112,18 @@ def create_emoji_captcha_keyboard(correct_emoji, wrong_emojis):
     return keyboard
 
 def check_channel_subscription(user_id):
-    """Проверяет, подписан ли пользователь на канал"""
+    """Проверяет, подписан ли пользователь на все обязательные каналы"""
     try:
-        # Сначала проверяем, может ли бот получить информацию о канале
-        chat_info = bot.get_chat(CHANNEL_ID)
-        print(f"🔍 Отладка: Информация о канале: {chat_info.title}")
-        
-        # Теперь проверяем подписку пользователя
-        member = bot.get_chat_member(CHANNEL_ID, user_id)
-        print(f"🔍 Отладка: Статус пользователя {user_id}: {member.status}")
-        
-        # Проверяем, что пользователь является участником, администратором или создателем
-        return member.status in ['member', 'administrator', 'creator']
+        for channel in CHANNELS:
+            chat_info = bot.get_chat(channel["id"])
+            print(f"🔍 Отладка: Информация о канале: {chat_info.title}")
+            member = bot.get_chat_member(channel["id"], user_id)
+            print(f"🔍 Отладка: Статус пользователя {user_id} в {channel['id']}: {member.status}")
+            if member.status not in ['member', 'administrator', 'creator']:
+                return False
+        return True
     except Exception as e:
         print(f"❌ Ошибка проверки подписки на канал: {e}")
-        # Если бот не может получить доступ к каналу, возвращаем True (пропускаем проверку)
         if "chat not found" in str(e) or "Bad Request" in str(e):
             print("🔍 Отладка: Бот не может получить доступ к каналу, пропускаем проверку")
             return True
@@ -1613,7 +1612,15 @@ def register_user(user_id, username):
 
 # --- Капча ---
 def need_captcha(user_id):
-    return not has_passed_captcha(user_id)
+    if 'ADMIN_IDS' in globals() and user_id in ADMIN_IDS:
+        return False
+    return not user_states.get(user_id, {}).get('captcha_passed', False)
+
+def generate_captcha():
+    import random
+    a = random.randint(2, 9)
+    b = random.randint(2, 9)
+    return f"Сколько будет {a} + {b}?", str(a + b)
 
 # --- START ---
 user_states = {}
@@ -1655,6 +1662,21 @@ def start_command(message: Message, edit=False):
     from db import get_all_users
     already_registered = any(row[0] == user_id for row in get_all_users())
     register_user(user_id, username)
+    # --- Капча только один раз ---
+    if need_captcha(user_id):
+        all_emojis = ["🍏", "🍎", "🍌", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "🥝", "🥑", "🍍"]
+        import random
+        correct_emoji = random.choice(all_emojis)
+        wrong_emojis = random.sample([e for e in all_emojis if e != correct_emoji], 2)
+        user_states[user_id] = user_states.get(user_id, {})
+        user_states[user_id]['captcha_emoji'] = correct_emoji
+        bot.send_message(
+            message.chat.id,
+            f"🖤 Для продолжения выбери <b>правильный эмодзи</b> из списка ниже:\n\n<b>Выбери: {correct_emoji}</b>",
+            parse_mode='HTML',
+            reply_markup=create_emoji_captcha_keyboard(correct_emoji, wrong_emojis)
+        )
+        return
     greetings = [
         "👋 Привет, {username}! Добро пожаловать в Maniac Info!",
         "💫 Рад тебя видеть, {username}!",
@@ -1663,30 +1685,21 @@ def start_command(message: Message, edit=False):
     ]
     greet = random.choice(greetings).format(username=f"@{username}" if username else f"ID:{user_id}")
     short_desc = "<b>💚 Maniac Info — быстрый поиск по номеру и имени, рефералы, подписки, бонусы!</b>"
-    # --- Капча только один раз ---
-    if need_captcha(user_id):
-        correct_emoji = random.choice(["🍏", "🍎", "🍌", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "🥝", "🥑", "🍍"])
-        wrong_emojis = random.sample([e for e in ["🍏", "🍎", "🍌", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "🥝", "🥑", "🍍"] if e != correct_emoji], 2)
-        bot.send_message(
-            message.chat.id,
-            f"🖤 Для продолжения выбери <b>правильный эмодзи</b> из списка ниже:\n\n<b>Выбери: {correct_emoji}</b>",
-            parse_mode='HTML',
-            reply_markup=create_emoji_captcha_keyboard(correct_emoji, wrong_emojis)
-        )
-        return
-    # --- Проверка подписки на канал ---
+    # --- Проверка подписки на каналы ---
     if not check_channel_subscription(user_id):
         channel_keyboard = InlineKeyboardMarkup(row_width=1)
+        for channel in CHANNELS:
+            channel_keyboard.add(
+                InlineKeyboardButton(f"💚 Подписаться на канал {channel['name']}", url=channel['link'])
+            )
         channel_keyboard.add(
-            InlineKeyboardButton("💚 Подписаться на канал", url=CHANNEL_LINK),
             InlineKeyboardButton("🖤 Проверить подписку", callback_data="check_subscription")
         )
         bot.send_message(
             message.chat.id,
-            f"🖤 ***Для использования бота необходимо подписаться на канал!***\n\n"
-            f"*Подпишитесь на наш канал <b>{CHANNEL_NAME}</b> для получения доступа к боту:*\n"
-            f"<b>{CHANNEL_NAME}</b>\n\n"
-            f"*После подписки нажмите 'Проверить подписку'*",
+            f"🖤 <b>Для использования бота необходимо подписаться на все каналы!</b>\n\n" +
+            "\n".join([f"<b>{ch['name']}</b>: {ch['link']}" for ch in CHANNELS]) +
+            "\n\nПосле подписки нажмите 'Проверить подписку'",
             parse_mode='HTML',
             reply_markup=channel_keyboard
         )
@@ -1727,14 +1740,18 @@ def start_command(message: Message, edit=False):
         reply_markup=create_main_keyboard()
     )
 
-# --- Капча обработчик ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("captcha_"))
 def handle_captcha_emoji(call: CallbackQuery):
     user_id = call.from_user.id
-    set_captcha_passed(user_id)
-    bot.answer_callback_query(call.id, "💚 Капча пройдена!")
-    # Теперь редактируем исходное сообщение, а не отправляем новое
-    start_command(call.message, edit=True)
+    username = call.from_user.username or "Unknown"
+    chosen_emoji = call.data.replace("captcha_", "")
+    correct_emoji = user_states.get(user_id, {}).get('captcha_emoji')
+    if chosen_emoji == correct_emoji:
+        user_states[user_id]['captcha_passed'] = True
+        bot.answer_callback_query(call.id, "💚 Капча пройдена!")
+        start_command(call.message, edit=False)
+    else:
+        bot.answer_callback_query(call.id, "🖤 Неверно! Попробуйте ещё раз.", show_alert=True)
 
 # --- Бесплатные запросы ---
 def has_free_request(user_id):
@@ -2006,6 +2023,9 @@ def create_admin_keyboard():
     keyboard.add(
         InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast"),
     )
+    keyboard.add(
+        InlineKeyboardButton("♻️ Сбросить капчу всем", callback_data="admin_reset_captcha"),
+    )
     return keyboard
 
 # --- Состояния админ-панели ---
@@ -2120,6 +2140,16 @@ def handle_admin_panel(call: CallbackQuery):
         admin_states[user_id] = {"step": "wait_broadcast_text", "mode": "broadcast"}
         bot.edit_message_text("📢 Введите текст для рассылки:", chat_id=chat_id, message_id=msg_id, parse_mode='HTML', reply_markup=create_back_keyboard())
         return
+    if action == "admin_reset_captcha":
+        reset_all_captcha()
+        bot.answer_callback_query(call.id, "💚 Капча сброшена для всех пользователей!", show_alert=True)
+        bot.edit_message_text(
+            "<b>🖤 Админ-панель</b>\n\nКапча сброшена для всех пользователей!",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode='HTML',
+            reply_markup=create_admin_keyboard()
+        )
 
 # --- Клавиатура "Назад" ---
 def create_back_keyboard(admin=False):
@@ -2149,6 +2179,7 @@ def admin_command(message: Message):
         "• ➕ Канал\n"
         "• ➖ Канал\n"
         "• 📢 Рассылка\n"
+        "• ♻️ Сбросить капчу всем\n"
     )
     bot.send_message(message.chat.id, admin_text, parse_mode='HTML', reply_markup=create_admin_keyboard())
 
