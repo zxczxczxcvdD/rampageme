@@ -59,7 +59,6 @@ telethon_loop = None
 # Конфигурация каналов для проверки подписки
 CHANNELS = [
     {"id": "-1002560851236", "link": "https://t.me/+WpK8oeax0iU2NTc0", "name": "Белый"},
-    {"id": "-1002697946371", "link": "https://t.me/+_lfBZmwzV6lmZWIy", "name": "DoxForever"}
 ]
 
 # Конфигурация оплаты
