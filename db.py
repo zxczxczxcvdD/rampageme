@@ -4,7 +4,7 @@ import psycopg2
 # Попробовать взять DATABASE_URL из переменных окружения (Railway), иначе использовать PUBLIC_URL для локального запуска
 DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL:
-    DATABASE_URL = 'postgresql://postgres:ZXAnJxWozHsJWgxHFuJzKXVEZfuZIEGy@crossover.proxy.rlwy.net:15802/railway'
+    DATABASE_URL = 'postgresql://postgres:gqxxOxjIpNsNakZDTANIeoGBYhWjXPXN@maglev.proxy.rlwy.net:43847/railway'
 
 conn = psycopg2.connect(DATABASE_URL)
 cur = conn.cursor()
